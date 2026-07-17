@@ -774,23 +774,41 @@
       else if(b.dataset.a==="copy"){navigator.clipboard.writeText(x.url);toast("URL copied.");}
 else if(b.dataset.a==="preview"){
         $("modalTitle").innerHTML=esc(x.filename)+` <span style="color:${sevColor(x.severity)}">[${x.severity}]</span> <span style="color:var(--text3);font-weight:400;font-size:12px">Score: ${computeScore(x)}</span>`;
-        const secrets=(x.secrets||[]).map(s=>`<span class="badge bg-${s.severity}">${s.label}</span>`).join(" ");
-        const ent=(x.entropy||[]).map(e=>`<span class="badge bg-medium">${e.label}: ${e.entropy.toFixed(1)}</span>`).join(" ");
-        const head=`URL: ${x.url}\nMethod: GET\nSeverity: ${x.severity}  Category: ${x.category}\nDetected: ${x.detected_type}  Mismatch: ${x.mismatch}\nSecrets: ${secrets||"none"}\nEntropy: ${ent||"none"}\nSHA256: ${x.sha256||""}\n${"=".repeat(60)}\n`;
+        let html=`<span style="color:var(--text)">URL:</span> ${esc(x.url)}\n`;
+        html+=`<span style="color:var(--text)">Method:</span> GET\n`;
+        html+=`<span style="color:var(--text)">Severity:</span> <span style="color:${sevColor(x.severity)}">${x.severity}</span>  `;
+        html+=`<span style="color:var(--text)">Category:</span> ${esc(x.category)}\n`;
+        html+=`<span style="color:var(--text)">Detected type:</span> ${esc(x.detected_type)}  `;
+        html+=`<span style="color:var(--text)">Mismatch:</span> ${x.mismatch}\n`;
+        html+=`<span style="color:var(--text)">Size:</span> ${fmtSize(x.size)}  `;
+        html+=`<span style="color:var(--text)">SHA256:</span> <span style="font-family:var(--mono)">${esc(x.sha256||"")}</span>\n`;
+        if(x.secrets&&x.secrets.length){
+          html+=`\n<span style="color:var(--text);font-weight:600">Secrets found (${x.secrets.length}):</span>\n`;
+          x.secrets.forEach(s=>{
+            html+=`  <span style="color:${sevColor(s.severity)}">&#9679;</span> <span style="font-weight:600">${esc(s.label)}</span>`;
+            if(s.sample) html+=` <span style="color:var(--text3)">(${esc(s.sample)})</span>`;
+            html+=`\n`;
+          });
+        } else { html+=`\n<span style="color:var(--text3)">No secrets detected</span>\n`; }
+        if(x.entropy&&x.entropy.length){
+          html+=`\n<span style="color:var(--text);font-weight:600">High-entropy strings (${x.entropy.length}):</span>\n`;
+          x.entropy.forEach(e=>{
+            html+=`  <span style="color:var(--medium)">&#9679;</span> <span style="font-family:var(--mono);font-size:11px">${esc(e.string||"")}</span>`;
+            html+=` <span style="color:var(--text3)">(${e.length} chars, entropy ${e.score})</span>\n`;
+          });
+        }
+        html+=`\n${"=".repeat(60)}\n`;
         let prev=x.preview||"(no preview / binary)";
-        // highlight secrets in preview
         (x.secrets||[]).forEach(s=>{
-          const escCtx=esc(s.context||"");
-          if(escCtx){
-            const re=new RegExp(escCtx.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"g");
-            prev=prev.replace(re,`<mark style="background:rgba(239,68,68,0.3);color:#fca5a5;padding:0 2px;border-radius:2px">${escCtx}</mark>`);
-          }
+          const sample=s.match||s.sample||"";
+          if(!sample)return;
+          try{
+            const re=new RegExp(sample.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"g");
+            prev=prev.replace(re,`<mark style="background:rgba(239,68,68,0.3);color:#fca5a5;padding:0 2px;border-radius:2px">${esc(sample)}</mark>`);
+         }catch(e){}
         });
-        // highlight entropy matches (if any)
-        (x.entropy||[]).forEach(e=>{
-          // entropy items don't have context, skip inline highlight
-        });
-        $("modalBody").innerHTML=head+prev;
+        html+=prev;
+        $("modalBody").innerHTML=html;
         $("modalBody").style.borderLeftColor=sevColor(x.severity);
         $("modal").classList.remove("hidden");
       }
