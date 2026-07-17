@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+
+# IndexHunter runtime data (sensitive / user-specific)
+indexhunter_auth.json
+indexhunter_secret.txt
+indexhunter_scans.json
+indexhunter_resume.json
+
+# Logs
+*.log
+server_log.txt
+server_err.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# YARA compiled rules
+*.yar.cCompiled

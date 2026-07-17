@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>IndexHunter — Security File Scanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing:border-box; }
+    :root {
+      --bg: #0a0e1a; --bg2: #111827; --surface: #1a1f2e; --border: rgba(255,255,255,0.06);
+      --text: #f1f5f9; --text2: #94a3b8; --text3: #64748b;
+      --primary: #6366f1; --primary-hover: #818cf8; --primary-glow: rgba(99,102,241,0.25);
+      --critical: #ef4444; --high: #f97316; --medium: #eab308; --low: #22c55e;
+      --font: 'Inter',system-ui,-apple-system,sans-serif;
+      --mono: 'JetBrains Mono','Fira Code',monospace;
+    }
+    body.light {
+      --bg: #f8fafc; --bg2: #f1f5f9; --surface: #ffffff; --border: rgba(0,0,0,0.06);
+      --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+      --primary-glow: rgba(99,102,241,0.12);
+    }
+    html { scroll-behavior:smooth; }
+    body {
+      margin:0; font-family:var(--font); background:var(--bg); color:var(--text);
+      transition:background .3s,color .3s; -webkit-font-smoothing:antialiased;
+    }
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:rgba(255,255,255,0.1); border-radius:4px; }
+    body.light ::-webkit-scrollbar-thumb { background:rgba(0,0,0,0.1); }
+
+    .surface { background:var(--surface); border:1px solid var(--border); border-radius:12px; }
+    .surface-hover:hover { border-color:rgba(255,255,255,0.12); }
+    body.light .surface-hover:hover { border-color:rgba(0,0,0,0.1); }
+    input,textarea,select {
+      background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px; padding:8px 12px;
+      color:var(--text); font-size:13px; outline:none; transition:border-color .2s,box-shadow .2s;
+      font-family:var(--font);
+    }
+    input:focus,textarea:focus,select:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-glow); }
+    body.light input,body.light textarea,body.light select { background:rgba(255,255,255,0.8); }
+    ::placeholder { color:var(--text3); }
+
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes pulse-glow { 0%,100%{box-shadow:0 0 8px var(--primary-glow)} 50%{box-shadow:0 0 20px var(--primary-glow)} }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    @keyframes countUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes slideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+    @keyframes toastIn { from{transform:translateX(calc(100%+32px));opacity:0} to{transform:translateX(0);opacity:1} }
+    @keyframes toastOut { from{transform:translateX(0);opacity:1} to{transform:translateX(calc(100%+32px));opacity:0} }
+    .anim-fade { animation:fadeIn .35s ease-out; }
+    .anim-slide { animation:slideUp .4s ease-out; }
+    .anim-count { animation:countUp .35s ease-out; }
+    .pulse-ring { animation:pulse-glow 2s ease-in-out infinite; }
+    .spinner { width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--primary); border-radius:50%; animation:spin .6s linear infinite; display:inline-block; }
+
+.sev-critical { color:var(--critical); } .sev-high { color:var(--high); } .sev-medium { color:var(--medium); } .sev-low { color:var(--low); }
+    .hidden { display:none !important; }
+    .bg-critical { background:var(--critical); } .bg-high { background:var(--high); } .bg-medium { background:var(--medium); } .bg-low { background:var(--low); }
+    .badge { display:inline-flex; align-items:center; gap:4px; padding:1px 7px; border-radius:999px; font-size:10px; font-weight:600; }
+    .badge-critical { background:rgba(239,68,68,0.15); color:var(--critical); }
+    .badge-high { background:rgba(249,115,22,0.15); color:var(--high); }
+    .badge-medium { background:rgba(234,179,8,0.15); color:var(--medium); }
+    .badge-low { background:rgba(34,197,94,0.15); color:var(--low); }
+    .badge-neutral { background:rgba(255,255,255,0.08); color:var(--text2); }
+
+    .tab-btn { padding:10px 16px; font-size:13px; font-weight:500; color:var(--text3); border-bottom:2px solid transparent; cursor:pointer; transition:color .2s,border-color .2s; }
+    .tab-btn:hover { color:var(--text); }
+    .tab-btn.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+    .tree-wrap { overflow:hidden; transition:max-height .25s ease; }
+    .caret { display:inline-block; width:12px; transition:transform .15s; color:var(--text3); user-select:none; }
+    .tree-dir { cursor:pointer; border-radius:6px; padding:2px 4px; display:flex; align-items:center; gap:4px; }
+    .tree-dir:hover { background:rgba(255,255,255,0.04); }
+    .tree-sev-dot { width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
+
+    .th-sort { cursor:pointer; user-select:none; transition:color .15s; }
+    .th-sort:hover { color:var(--text); }
+    .th-sort .sort-arrow { opacity:0; margin-left:2px; font-size:9px; }
+    .th-sort.sort-asc .sort-arrow,.th-sort.sort-desc .sort-arrow { opacity:1; }
+
+    .toast-container { position:fixed; top:16px; right:16px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+    .toast { animation:toastIn .35s ease-out; padding:10px 16px; border-radius:10px; font-size:13px; pointer-events:auto;
+      box-shadow:0 8px 24px rgba(0,0,0,0.3); display:flex; align-items:center; gap:8px; max-width:380px; backdrop-filter:blur(12px); }
+    .toast.out { animation:toastOut .3s ease-in forwards; }
+    body.light .toast { box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+    .toast-info { background:rgba(30,41,59,0.95); color:var(--text); }
+    body.light .toast-info { background:rgba(255,255,255,0.95); }
+    .toast-error { background:rgba(239,68,68,0.15); color:var(--critical); border:1px solid rgba(239,68,68,0.2); }
+    .toast-success { background:rgba(34,197,94,0.15); color:var(--low); border:1px solid rgba(34,197,94,0.2); }
+
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); z-index:500; animation:fadeIn .2s ease-out; }
+    .modal-panel { animation:slideUp .3s ease-out; }
+
+    .settings-panel { animation:slideIn .3s ease-out; }
+    .settings-section { padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+
+    .row-sel { accent-color:var(--primary); }
+    .ficon { font-size:1.1em; line-height:1; }
+
+    body.light .tr-hover:hover { background:rgba(0,0,0,0.02); }
+    .tr-hover:hover { background:rgba(255,255,255,0.03); }
+
+    .saved-item { cursor:pointer; border-radius:8px; padding:6px 8px; border:1px solid transparent; transition:border-color .15s,background .15s; }
+    .saved-item:hover { border-color:var(--border); background:rgba(255,255,255,0.03); }
+    body.light .saved-item:hover { background:rgba(0,0,0,0.02); }
+  </style>
+</head>
+<body>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Header -->
+  <header style="background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px)">
+    <div style="max-width:1520px;margin:0 auto;padding:0 20px;height:56px;display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#fff">I</div>
+        <div>
+          <div style="font-size:15px;font-weight:700;letter-spacing:-.02em">IndexHunter</div>
+          <div style="font-size:10px;color:var(--text3);letter-spacing:.02em">SECURITY FILE SCANNER</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button id="startBtn" style="display:flex;align-items:center;gap:6px;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;transition:opacity .15s,transform .1s" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform='scale(1)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start
+        </button>
+        <button id="stopBtn" disabled style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:600;border:none;cursor:pointer;background:rgba(239,68,68,0.12);color:var(--critical);opacity:.4;transition:opacity .15s,transform .1s" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform='scale(1)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+          Stop
+        </button>
+        <div style="width:1px;height:24px;background:var(--border);margin:0 4px"></div>
+
+        <button id="settingsBtn" title="Settings" style="padding:6px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;transition:color .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+        <div style="width:1px;height:24px;background:var(--border);margin:0 4px"></div>
+        <button id="logoutBtn" title="Sign out" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(239,68,68,0.4)';this.style.color='var(--critical)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign out
+        </button>
+        <div class="relative">
+          <button id="exportBtn" style="display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export
+          </button>
+          <div id="exportMenu" class="hidden" style="position:absolute;right:0;top:calc(100%+6px);min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;z-index:200;box-shadow:0 12px 32px rgba(0,0,0,0.3)">
+            <button data-fmt="json" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">JSON</button>
+            <button data-fmt="csv" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">CSV</button>
+            <button data-fmt="html" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">HTML</button>
+            <button data-fmt="markdown" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">Markdown</button>
+            <button data-fmt="sarif" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">SARIF</button>
+            <button data-fmt="pdf" class="exp-item" style="display:block;width:100%;text-align:left;padding:8px 14px;font-size:12px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Progress bar -->
+  <div id="progressWrap" class="hidden" style="max-width:1520px;margin:0 auto;padding:0 20px;padding-top:12px">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div class="spinner"></div>
+      <span id="progLabel" style="font-size:12px;color:var(--text2)">Scanning...</span>
+      <span id="progPct" style="font-size:12px;font-family:var(--mono);color:var(--text3);margin-left:auto">0%</span>
+    </div>
+    <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden">
+      <div id="progBar" style="height:100%;width:0%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#8b5cf6,#a78bfa);transition:width .5s ease"></div>
+    </div>
+  </div>
+
+  <div style="max-width:1520px;margin:0 auto;padding:12px 20px">
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:16px" id="mainGrid">
+
+      <!-- Sidebar -->
+      <aside id="sidebar" style="display:flex;flex-direction:column;gap:12px">
+        <div class="surface" style="padding:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Target</div>
+          <input id="url" type="text" placeholder="https://example.com/index/" style="width:100%;margin-bottom:10px" />
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text2)">Workers: <span id="workersVal" style="color:var(--text);font-weight:600">10</span></span>
+            <input id="workers" type="range" min="1" max="100" value="10" style="width:130px;accent-color:var(--primary)" />
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text2)">Depth: <span id="depthVal" style="color:var(--text);font-weight:600">&#8734;</span></span>
+            <input id="depth" type="range" min="0" max="30" value="0" style="width:130px;accent-color:var(--primary)" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="full" type="checkbox" style="accent-color:var(--primary)" /> Full download</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="robots" type="checkbox" checked style="accent-color:var(--primary)" /> Respect robots.txt</label>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input id="resume" type="checkbox" style="accent-color:var(--primary)" /> Resume</label>
+          </div>
+        </div>
+
+        <div class="surface" style="padding:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Ignore</div>
+          <textarea id="ignore" rows="3" placeholder="node_modules/&#10;*.png&#10;vendor/" style="width:100%;resize:none;font-family:var(--mono);font-size:11px"></textarea>
+        </div>
+
+        <div class="surface" style="padding:16px">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;gap:8px">
+            Filters <span id="filterCountBadge" class="badge badge-neutral" style="display:none">0</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px" id="sevChips">
+            <button data-sev="critical" class="sev-chip" style="font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">critical</button>
+            <button data-sev="high" class="sev-chip" style="font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">high</button>
+            <button data-sev="medium" class="sev-chip" style="font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">medium</button>
+            <button data-sev="low" class="sev-chip" style="font-size:10px;padding:2px 10px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s">low</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <input id="fCat" placeholder="category" class="filter-inp" />
+            <input id="fExt" placeholder="extension" class="filter-inp" />
+            <input id="fFolder" placeholder="folder contains" class="filter-inp" />
+            <input id="fKw" placeholder="keyword" class="filter-inp" />
+            <input id="fRx" placeholder="regex" class="filter-inp" style="font-family:var(--mono)" />
+          </div>
+          <button id="resetFilters" style="margin-top:8px;width:100%;padding:6px;border-radius:6px;font-size:11px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.borderColor='var(--border)'">Reset</button>
+        </div>
+
+        <div class="surface" style="padding:16px;flex:1">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+            <span>Saved Scans</span>
+            <span id="savedCount" style="font-size:10px;color:var(--text3)">0</span>
+          </div>
+          <div id="savedScansList" style="max-height:260px;overflow-y:auto;margin-bottom:8px;font-size:12px"></div>
+          <div style="display:flex;gap:4px">
+            <button id="exportSavedBtn" style="flex:1;padding:5px;border-radius:6px;font-size:10px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.borderColor='var(--border)'">Export JSON</button>
+            <button id="importSavedBtn" style="flex:1;padding:5px;border-radius:6px;font-size:10px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.borderColor='var(--border)'">Import</button>
+            <input id="importFileInput" type="file" accept=".json" style="display:none" />
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main content -->
+      <main style="display:flex;flex-direction:column;gap:12px;min-width:0">
+
+        <!-- Dashboard -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px" id="dash"></div>
+
+        <!-- Tabs -->
+        <div class="surface" style="overflow:hidden;display:flex;flex-direction:column">
+          <div style="display:flex;border-bottom:1px solid var(--border);padding:0 4px;gap:0" id="tabs">
+            <button data-tab="results" class="tab-btn active" style="display:flex;align-items:center;gap:6px">
+              Results <span id="tabBadge-results" class="badge badge-neutral" style="display:none">0</span>
+            </button>
+            <button data-tab="tree" class="tab-btn">Tree</button>
+            <button data-tab="summary" class="tab-btn">Summary</button>
+            <button data-tab="log" class="tab-btn">Log <span id="logCount" style="color:var(--text3);margin-left:2px"></span></button>
+          </div>
+
+          <!-- Results panel -->
+          <div id="panel-results" style="padding:12px 16px;overflow:auto;max-height:58vh">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:12px;color:var(--text2)">
+              <span id="resultInfo">No findings</span>
+              <div style="display:flex;align-items:center;gap:12px">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input id="compactView" type="checkbox" style="accent-color:var(--primary)" /> Compact</label>
+                <span id="selInfo" style="color:var(--text3)"></span>
+                <button id="batchCopy" class="hidden" style="font-size:12px;border:none;background:transparent;color:var(--primary);cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">Copy URLs</button>
+              </div>
+            </div>
+            <div style="overflow-x:auto">
+              <table style="width:100%;font-size:12px;border-collapse:collapse">
+                <thead>
+                  <tr style="color:var(--text3);font-size:10px;text-transform:uppercase;letter-spacing:.03em">
+                    <th style="padding:6px 8px;text-align:left;width:20px"><input id="selAll" type="checkbox" class="row-sel" /></th>
+                    <th class="th-sort" data-col="score" style="padding:6px 8px;text-align:left">Score <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="severity" style="padding:6px 8px;text-align:left">Sev <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="filename" style="padding:6px 8px;text-align:left">File <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="category" style="padding:6px 8px;text-align:left">Category <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="detected_type" style="padding:6px 8px;text-align:left">Type <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="size" style="padding:6px 8px;text-align:left">Size <span class="sort-arrow">&#9650;</span></th>
+                    <th class="th-sort" data-col="secrets_cnt" style="padding:6px 8px;text-align:left">Secrets <span class="sort-arrow">&#9650;</span></th>
+                    <th style="padding:6px 8px;text-align:left;display:none" class="md-col">URL</th>
+                    <th style="padding:6px 8px;text-align:left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="rows"></tbody>
+              </table>
+            </div>
+            <p id="empty" style="text-align:center;color:var(--text3);padding:48px 0;font-size:14px">No findings yet — start a scan.</p>
+            <div id="pagination" class="hidden" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text3)">
+              <button id="pgPrev" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)'" onmouseout="this.style.borderColor='var(--border)'">&#9664;</button>
+              <span id="pgInfo"></span>
+              <button id="pgNext" style="padding:4px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)'" onmouseout="this.style.borderColor='var(--border)'">&#9654;</button>
+            </div>
+          </div>
+
+          <!-- Tree panel -->
+          <div id="panel-tree" class="hidden" style="padding:12px 16px;overflow:auto;max-height:58vh">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <input id="treeFilter" type="text" placeholder="Filter tree..." style="flex:1;font-size:12px" />
+              <button id="treeExpandAll" style="padding:4px 10px;border-radius:6px;font-size:11px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)'" onmouseout="this.style.borderColor='var(--border)'">&#9660; All</button>
+              <button id="treeCollapseAll" style="padding:4px 10px;border-radius:6px;font-size:11px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.2)'" onmouseout="this.style.borderColor='var(--border)'">&#9650; All</button>
+            </div>
+            <div style="display:flex;gap:16px;margin-bottom:8px;font-size:10px;color:var(--text3)">
+              <span id="treeFolderCount">0 folders</span>
+              <span id="treeFileCount">0 files</span>
+              <span id="treeFilterMatch" style="color:var(--primary);display:none"></span>
+            </div>
+            <div id="treeRoot" style="font-size:13px;font-family:var(--mono);color:var(--text2);overflow-x:auto"></div>
+            <div id="treeCtx" class="hidden" style="position:fixed;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:500;box-shadow:0 8px 24px rgba(0,0,0,0.3);min-width:130px"></div>
+          </div>
+
+          <!-- Summary panel -->
+          <div id="panel-summary" class="hidden" style="padding:16px;overflow:auto;max-height:58vh">
+            <div style="display:grid;grid-template-columns:1fr 260px;gap:24px">
+              <div>
+                <pre id="summaryOut" style="font-size:13px;font-family:var(--mono);color:var(--text2);white-space:pre-wrap;margin:0"></pre>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:center;justify-content:center">
+                <svg id="donutSvg" width="180" height="180" viewBox="0 0 180 180"></svg>
+                <div id="donutLegend" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:12px;font-size:11px"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Log panel -->
+          <div id="panel-log" class="hidden" style="padding:12px 16px;overflow:auto;max-height:58vh">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-size:12px;color:var(--text3)">
+              <span id="logLineCount">0 lines</span>
+              <div style="display:flex;align-items:center;gap:12px">
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input id="logAutoScroll" type="checkbox" checked style="accent-color:var(--primary)" /> Auto-scroll</label>
+                <button id="logClear" style="border:none;background:transparent;color:var(--text3);cursor:pointer;transition:color .15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text3)'">&#10005; Clear</button>
+              </div>
+            </div>
+            <pre id="logOut" style="font-size:11px;font-family:var(--mono);color:#34d399;white-space:pre-wrap;line-height:1.6;margin:0"></pre>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Preview modal -->
+  <div id="modal" class="hidden" style="position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div class="modal-overlay" onclick="closeModal()"></div>
+    <div class="modal-panel" style="position:relative;z-index:501;background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:720px;max-height:80vh;overflow:auto;padding:24px;box-shadow:0 24px 48px rgba(0,0,0,0.4)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px">
+        <h3 id="modalTitle" style="font-size:14px;font-weight:600;color:var(--text);padding-right:16px;word-break:break-all"></h3>
+        <button onclick="closeModal()" style="flex-shrink:0;width:28px;height:28px;border-radius:6px;border:none;background:rgba(255,255,255,0.06);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">&#10005;</button>
+      </div>
+      <div id="modalBody" style="font-size:12px;font-family:var(--mono);color:var(--text2);white-space:pre-wrap;background:rgba(0,0,0,0.2);border-radius:10px;padding:16px;overflow:auto;max-height:55vh;margin:0;border-left:4px solid var(--critical)"></div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settingsOverlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);z-index:400;animation:fadeIn .2s ease-out" onclick="closeSettings()"></div>
+  <div id="settingsPanel" class="hidden settings-panel" style="position:fixed;top:0;right:0;height:100%;width:100%;max-width:340px;background:var(--surface);border-left:1px solid var(--border);z-index:401;overflow-y:auto;box-shadow:-8px 0 24px rgba(0,0,0,0.3)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <div style="font-size:14px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </div>
+      <button onclick="closeSettings()" style="width:28px;height:28px;border-radius:6px;border:none;background:rgba(255,255,255,0.06);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">&#10005;</button>
+    </div>
+    <div style="padding:16px 20px;font-size:12px">
+      <div class="settings-section">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">Theme</div>
+        <div style="display:flex;gap:6px">
+          <button id="themeDark" class="theme-btn" data-theme="dark" style="flex:1;padding:7px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,0.04);color:var(--text2);cursor:pointer;transition:all .15s;font-size:12px">&#127769; Dark</button>
+          <button id="themeLight" class="theme-btn" data-theme="light" style="flex:1;padding:7px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;font-size:12px">&#9728;&#65039; Light</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">Results per page</div>
+        <select id="setPageSize" style="width:100%">
+          <option value="10">10</option>
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+          <option value="0">All</option>
+        </select>
+      </div>
+      <div class="settings-section">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">Default scan values</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="color:var(--text3)">Workers</span>
+          <input id="setWorkers" type="number" min="1" max="200" value="10" style="width:70px;text-align:center" />
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span style="color:var(--text3)">Depth</span>
+          <input id="setDepth" type="number" min="0" max="50" value="0" style="width:70px;text-align:center" />
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:4px">0 = unlimited</div>
+      </div>
+      <div class="settings-section">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">Column visibility</div>
+        <div id="colVisList">
+          <label class="col-vis-label"><input type="checkbox" data-col="score" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Score</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="severity" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Severity</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="filename" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> File</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="category" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Category</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="detected_type" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Type</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="size" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Size</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="secrets" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> Secrets</label>
+          <label class="col-vis-label"><input type="checkbox" data-col="url" checked class="accent-blue-500 col-vis-cb" style="accent-color:var(--primary)" /> URL</label>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">Custom detection patterns</div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">Findings matching these filename patterns get a custom tag.</div>
+        <div id="customPatternsList" style="margin-bottom:8px"></div>
+        <div style="display:flex;gap:4px">
+          <input id="cpPattern" placeholder="e.g. *.secret" style="flex:1;font-family:var(--mono);font-size:11px" />
+          <input id="cpLabel" placeholder="label" style="width:60px;font-size:11px" />
+          <button id="cpAdd" style="padding:6px 12px;border-radius:6px;border:none;background:var(--primary);color:#fff;font-weight:600;cursor:pointer;transition:opacity .15s;font-size:12px" onmouseover="this.style.opacity='.9'" onmouseout="this.style.opacity='1'">+</button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px">
+          <input id="setAutoScroll" type="checkbox" checked style="accent-color:var(--primary)" /> Auto-scroll log by default
+        </label>
+      </div>
+      <button id="settingsReset" style="width:100%;padding:8px;border-radius:8px;font-size:11px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='rgba(255,255,255,0.15)'" onmouseout="this.style.borderColor='var(--border)'">&#8634; Reset all settings</button>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const TOKEN = () => localStorage.getItem("indexhunter_token") || "";
+    const AUTH_HDR = () => ({ "Authorization": "Bearer " + TOKEN() });
+    // Gate the app: bounce to /login if no token is stored.
+    if (!TOKEN()) { window.location.href = "/login"; }
+    const findings = [];
+    const severities = new Set();
+    let scanning = false;
+    let _currentScanUrl = "";
+    let logLines = 0;
+    let _sortCol = null, _sortDir = 1;
+    let _page = 0, _pageSize = 50;
+    let _selSet = new Set();
+    let _customPatterns = [];
+    let _scanStartTime = 0;
+    let _scanConfig = {};
+
+    const DEFAULTS = { theme:"dark", pageSize:50, workers:10, depth:0, autoScroll:true,
+      colVis:{score:true,severity:true,filename:true,category:true,detected_type:true,size:true,secrets:true,url:true},
+      customPatterns:[] };
+    function loadSettings() {
+      try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem("indexhunter_settings"))); } catch(e) { return {...DEFAULTS}; }
+    }
+    function saveSettings() { localStorage.setItem("indexhunter_settings", JSON.stringify(_settings)); }
+    let _settings = loadSettings();
+
+    // -- toast --
+    function toast(msg, kind) {
+      kind = kind || "info";
+      const container = $("toastContainer");
+      const el = document.createElement("div");
+      el.className = "toast toast-"+kind;
+      const icon = kind==="error"?'&#9888;':kind==="success"?'&#10003;':'&#9432;';
+      el.innerHTML = '<span>'+icon+'</span><span>'+msg+'</span>';
+      container.appendChild(el);
+      setTimeout(() => { el.classList.add("out"); setTimeout(()=>el.remove(),300); }, 3500);
+    }
+
+    // -- settings apply --
+    function applyTheme(t) {
+      document.body.classList.toggle("light", t==="light");
+      document.querySelectorAll(".theme-btn").forEach(b=>{
+        b.style.background = b.dataset.theme===t ? 'var(--primary)' : 'transparent';
+        b.style.color = b.dataset.theme===t ? '#fff' : 'var(--text2)';
+        b.style.borderColor = b.dataset.theme===t ? 'var(--primary)' : 'var(--border)';
+      });
+    }
+    $("settingsBtn").onclick = () => { $("settingsOverlay").classList.remove("hidden"); $("settingsPanel").classList.remove("hidden"); };
+    function closeSettings() { $("settingsOverlay").classList.add("hidden"); $("settingsPanel").classList.add("hidden"); saveSettings(); }
+    $("settingsClose")?.addEventListener("click", closeSettings);
+    $("settingsOverlay").addEventListener("click", closeSettings);
+    document.querySelectorAll(".theme-btn").forEach(b => b.onclick = () => { _settings.theme = b.dataset.theme; applyTheme(b.dataset.theme); });
+    applyTheme(_settings.theme);
+    $("setPageSize").value = _settings.pageSize;
+    $("setPageSize").onchange = () => { _settings.pageSize = +$("setPageSize").value; _pageSize = _settings.pageSize||999999; _page=0; render(); };
+    $("setWorkers").value = _settings.workers;
+    $("setDepth").value = _settings.depth;
+    $("setWorkers").onchange = () => { _settings.workers = +$("setWorkers").value||10; $("workers").value=_settings.workers; $("workersVal").textContent=_settings.workers; };
+    $("setDepth").onchange = () => { _settings.depth = +$("setDepth").value||0; $("depth").value=_settings.depth; $("depthVal").textContent=_settings.depth||"\u221e"; };
+    $("workers").value = _settings.workers; $("workersVal").textContent = _settings.workers;
+    $("depth").value = _settings.depth; $("depthVal").textContent = _settings.depth||"\u221e";
+    function applyColVis() {
+      const v = _settings.colVis;
+      ["score","severity","filename","category","detected_type","size","secrets","url"].forEach(col => {
+        const th = document.getElementById("col-"+col);
+        if (th) th.style.display = v[col] ? "" : "none";
+      });
+    }
+    document.querySelectorAll(".col-vis-cb").forEach(cb => {
+      const col = cb.dataset.col;
+      cb.checked = _settings.colVis[col] !== false;
+      cb.onchange = () => { _settings.colVis[col] = cb.checked; applyColVis(); render(); };
+    });
+    applyColVis();
+    function renderCustomPatterns() {
+      $("customPatternsList").innerHTML = _settings.customPatterns.map((p,i) =>
+        `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:rgba(255,255,255,0.03);border-radius:6px;margin-bottom:4px">
+          <span style="flex:1;font-family:var(--mono);font-size:11px">${esc(p.pattern)}</span>
+          ${p.label ? `<span class="badge badge-neutral" style="font-size:9px">${esc(p.label)}</span>` : ''}
+          <button class="cp-del" data-i="${i}" style="border:none;background:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 2px">&#10005;</button>
+        </div>`
+      ).join("");
+      document.querySelectorAll(".cp-del").forEach(b => b.onclick = () => { _settings.customPatterns.splice(+b.dataset.i,1); renderCustomPatterns(); saveSettings(); render(); });
+    }
+    $("cpAdd").onclick = () => {
+      const p = $("cpPattern").value.trim(), l = $("cpLabel").value.trim();
+      if (!p) return;
+      _settings.customPatterns.push({pattern:p, label:l||""});
+      $("cpPattern").value=""; $("cpLabel").value="";
+      renderCustomPatterns(); saveSettings(); render();
+    };
+    $("cpPattern").addEventListener("keydown", e => { if (e.key==="Enter") $("cpAdd").click(); });
+    renderCustomPatterns();
+    $("setAutoScroll").checked = _settings.autoScroll;
+    $("setAutoScroll").onchange = () => { _settings.autoScroll = $("setAutoScroll").checked; $("logAutoScroll").checked = _settings.autoScroll; };
+    $("logAutoScroll").checked = _settings.autoScroll;
+    $("settingsReset").onclick = () => {
+      if (!confirm("Reset all settings to defaults?")) return;
+      _settings = JSON.parse(JSON.stringify(DEFAULTS));
+      saveSettings();
+      applyTheme(_settings.theme);
+      $("setPageSize").value = _settings.pageSize; _pageSize = _settings.pageSize||999999;
+      $("setWorkers").value = _settings.workers; $("workers").value=_settings.workers; $("workersVal").textContent=_settings.workers;
+      $("setDepth").value = _settings.depth; $("depth").value=_settings.depth; $("depthVal").textContent=_settings.depth||"\u221e";
+      document.querySelectorAll(".col-vis-cb").forEach(cb => { cb.checked = _settings.colVis[cb.dataset.col]!==false; });
+      applyColVis();
+      $("setAutoScroll").checked = _settings.autoScroll; $("logAutoScroll").checked = _settings.autoScroll;
+      _settings.customPatterns = []; renderCustomPatterns();
+      _page=0; render();
+      toast("Settings reset to defaults.", "success");
+    };
+
+    // -- utility --
+    function esc(s){ return (s==null?"":String(s)).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+    function fmtSize(n) {
+      if (!n) return "0 B"; const u=["B","KB","MB","GB"]; let i=0;
+      while (n>=1024 && i<3) { n/=1024; i++; }
+      return n.toFixed(i>0?1:0)+" "+u[i];
+    }
+    function sevColor(s) { return {critical:"#ef4444",high:"#f97316",medium:"#eab308",low:"#22c55e"}[s]||"#94a3b8"; }
+    function iconFor(fn) {
+      const e = (fn||"").split(".").pop().toLowerCase();
+      const m = {json:"&#123;&#125;",xml:"&#60;/&#62;",yml:"YML",yaml:"YML",toml:"TOM",ini:"INI",cfg:"CFG",conf:"CFG",
+                 env:"ENV",sql:"SQL",db:"DB",zip:"ZIP",tar:"TAR",gz:"GZ",rar:"RAR",bak:"BAK",old:"OLD",
+                 pwd:"PWD",key:"KEY",pem:"PEM",cert:"CRT",log:"LOG",lock:"LCK",md:"MD",php:"PHP",py:"PY",
+                 js:"JS",ts:"TS",css:"CSS",html:"HTML",sh:"SH",bat:"BAT",ps1:"PS1"};
+      return m[e]||"&#128196;";
+    }
+    function computeScore(x) {
+      const sevBase={critical:80,high:60,medium:40,low:20}[x.severity]||0;
+      let s=sevBase; const sec=x.secrets||[], ent=x.entropy||[];
+      if (sec.length) s+=10+Math.min(sec.length*3,15);
+      if (ent.length) s+=Math.min(ent.length*5,10);
+      if (x.mismatch) s+=10;
+      if (x.cloud&&x.cloud.length) s+=5;
+      if (x.framework) s+=5;
+      if (x.duplicate) s-=10;
+      if (x.detected_type && x.detected_type!==(x.category||"").toLowerCase()) s+=5;
+      return Math.max(0,Math.min(100,s));
+    }
+    function scoreColor(s) { return s>=80?"#ef4444":s>=60?"#f97316":s>=40?"#eab308":"#22c55e"; }
+    function matchCustomPatterns(fname) {
+      const tags=[];
+      for (const p of _settings.customPatterns) {
+        const rx=p.pattern.replace(/\*/g,".*").replace(/\?/g,".");
+        try { if (new RegExp("^"+rx+"$","i").test(fname)) tags.push(p.label||p.pattern); } catch(e){}
+      }
+      return tags;
+    }
+
+    // -- tree --
+    const TREE = { __dirs: {}, __files: [] };
+    function _mkDir() { return { __dirs: {}, __files: [] }; }
+    function addDir(path) {
+      path = (path||"").replace(/\/+$/, ""); if (!path) return;
+      const parts = path.split("/").filter(Boolean);
+      let node = TREE;
+      for (const p of parts) { if (!node.__dirs[p]) node.__dirs[p] = _mkDir(); node = node.__dirs[p]; }
+    }
+    function addFile(path, meta) {
+      const parts = (path||"").split("/").filter(Boolean); const fname = parts.pop();
+      let node = TREE;
+      for (const p of parts) { if (!node.__dirs[p]) node.__dirs[p] = _mkDir(); node = node.__dirs[p]; }
+      if (!node.__files.some(f=>f.filename===fname))
+        node.__files.push({ filename: fname, severity: (meta&&meta.severity)||null });
+    }
+    function _treeCountFiles(node) { let c=node.__files.length; for (const d of Object.keys(node.__dirs)) c+=_treeCountFiles(node.__dirs[d]); return c; }
+    let _treeFilter = "";
+    function _treeMatch(fn) { return !_treeFilter || fn.toLowerCase().includes(_treeFilter.toLowerCase()); }
+    function buildNode(node, isRoot, depth) {
+      depth=depth||0; const ul=document.createElement("ul");
+      if (!isRoot) ul.style.cssText="margin-left:12px;padding-left:12px;border-left:1px solid var(--border)";
+      let fc=0, mfc=0;
+      for (const d of Object.keys(node.__dirs).sort()) {
+        const child = buildNode(node.__dirs[d], false, depth+1);
+        const cf = child._fc || 0; fc += cf;
+        const li=document.createElement("li");
+        li._fc=cf;
+        const head=document.createElement("div");
+        head.className="tree-dir";
+        const hasMatch = !_treeFilter || cf>0;
+        if (!hasMatch && !cf) li.style.display="none";
+        head.innerHTML=`<span class="caret">&#9656;</span><span style="color:#818cf8">📁 ${esc(d)}</span>${cf?`<span class="badge badge-neutral" style="font-size:9px;margin-left:4px">${cf}</span>`:""}`;
+        const wrap=document.createElement("div"); wrap.className="tree-wrap"; wrap.style.maxHeight="0";
+        wrap.appendChild(child);
+        head.onclick=()=>{const h=wrap.style.maxHeight==="0px"||!wrap.style.maxHeight; wrap.style.maxHeight=h?(wrap._sh||2000)+"px":"0px"; head.querySelector(".caret").textContent=h?"&#9662;":"&#9656;";};
+        if (!wrap._sh) { wrap._sh=child.scrollHeight||2000; requestAnimationFrame(()=>{wrap._sh=child.scrollHeight||2000;}); }
+        li.appendChild(head); li.appendChild(wrap); ul.appendChild(li);
+      }
+      for (const f of node.__files) {
+        const mt=_treeMatch(f.filename); if (mt) mfc++; fc++;
+        const li=document.createElement("li");
+        li.style.cssText="padding:2px 4px;display:flex;align-items:center;gap:4px"+(mt?"":";display:none");
+        const cls=f.severity?"sev-"+f.severity:"";
+        const dot=f.severity?`<span class="tree-sev-dot" style="background:${sevColor(f.severity)}"></span>`:"";
+        li.innerHTML=`<span style="opacity:.5;font-size:1.1em">${iconFor(f.filename)}</span>${dot}<span class="${cls}" style="font-size:12px">${esc(f.filename)}</span>`;
+        ul.appendChild(li);
+      }
+      ul._fc=fc; ul._mfc=mfc; return ul;
+    }
+    function renderTree() {
+      const root=$("treeRoot"); root.innerHTML="";
+      const ul=buildNode(TREE,true);
+      if (!ul.children.length) { root.innerHTML='<p style="color:var(--text3);font-size:13px">Tree will appear as folders/files are discovered.</p>'; $("treeFolderCount").textContent="0 folders"; $("treeFileCount").textContent="0 files"; return; }
+      root.appendChild(ul);
+      let td=0,tf=0; function walk(n){for(const d of Object.keys(n.__dirs)){td++; walk(n.__dirs[d]);} tf+=n.__files.length;} walk(TREE);
+      const matches=root.querySelectorAll("li:not([style*='display:none'])").length;
+      $("treeFolderCount").textContent=td+" folder"+(td!==1?"s":"");
+      $("treeFileCount").textContent=tf+" file"+(tf!==1?"s":"");
+      const fm=$("treeFilterMatch");
+      if (_treeFilter && matches<tf) { fm.textContent=matches+" match"+(matches!==1?"es":""); fm.style.display="inline"; } else { fm.style.display="none"; }
+    }
+    let _treePending=false;
+    function scheduleTreeRender() { if (_treePending) return; _treePending=true; setTimeout(()=>{ _treePending=false; renderTree(); },80); }
+    function treeSetAll(show) {
+      document.querySelectorAll("#treeRoot .tree-wrap").forEach(w=>{ w.style.maxHeight=show?(w._sh||2000)+"px":"0px"; });
+      document.querySelectorAll("#treeRoot .caret").forEach(c=>{ c.textContent=show?"&#9662;":"&#9656;"; });
+    }
+
+    // -- dashboard --
+    const DASH=["Speed","ETA","Queue","Scanned","Requests","Critical","High","Medium","Low","Memory"];
+    const dashVals={};
+    DASH.forEach(name=>{
+      const el=document.createElement("div");
+      el.style.cssText="padding:10px 8px;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:10px";
+      el.innerHTML=`<div style="font-size:15px;font-weight:700" id="d_${name}">-</div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.03em;margin-top:2px">${name}</div>`;
+      $("dash").appendChild(el); dashVals[name]=el.querySelector("#d_"+name);
+    });
+    function animateValue(el,val){ if(el._last===val) return; el._last=val; el.textContent=val; el.classList.remove("anim-count"); void el.offsetWidth; el.classList.add("anim-count"); }
+
+    // -- filters --
+    document.querySelectorAll(".sev-chip").forEach(b=>{
+      b.onclick=()=>{
+        const s=b.dataset.sev;
+        if (severities.has(s)) { severities.delete(s); b.style.background='transparent'; b.style.color='var(--text2)'; b.style.borderColor='var(--border)'; }
+        else { severities.add(s); b.style.background='var(--primary)'; b.style.color='#fff'; b.style.borderColor='var(--primary)'; }
+        updateFilterBadge(); _page=0; render();
+      };
+    });
+    function countActiveFilters(){let c=severities.size;["fCat","fExt","fFolder","fKw","fRx"].forEach(id=>{if($(id).value.trim())c++;});return c;}
+    function updateFilterBadge(){const c=countActiveFilters(),b=$("filterCountBadge"); if(c){b.textContent=c;b.style.display="inline-flex";}else{b.style.display="none";}}
+    function currentFilter(){return{severity:[...severities].join(","),category:$("fCat").value,ext:$("fExt").value,folder:$("fFolder").value,keyword:$("fKw").value,regex:$("fRx").value};}
+    ["fCat","fExt","fFolder","fKw","fRx"].forEach(id=>$(id).addEventListener("input",()=>{updateFilterBadge();_page=0;render();}));
+    $("resetFilters").onclick=()=>{severities.clear();document.querySelectorAll(".sev-chip").forEach(b=>{b.style.background='transparent';b.style.color='var(--text2)';b.style.borderColor='var(--border)';});["fCat","fExt","fFolder","fKw","fRx"].forEach(id=>$(id).value="");updateFilterBadge();_page=0;_sortCol=null;render();};
+    function filtered() {
+      const f=currentFilter();
+      return findings.filter(x=>{
+        if (f.severity&&!f.severity.split(",").includes(x.severity)) return false;
+        if (f.category&&!f.category.split(",").includes(x.category)) return false;
+        if (f.ext&&f.ext.split(",").map(e=>e.toLowerCase()).indexOf((x.extension||"").toLowerCase())===-1) return false;
+        if (f.folder&&!x.path.toLowerCase().includes(f.folder.toLowerCase())) return false;
+        if (f.keyword&&!(x.path+" "+x.url).toLowerCase().includes(f.keyword.toLowerCase())) return false;
+        if (f.regex){try{if(!(new RegExp(f.regex).test(x.url)||new RegExp(f.regex).test(x.path))) return false}catch(e){}}
+        return true;
+      });
+    }
+
+    // -- sorting --
+    function sortFindings(arr) {
+      if (!_sortCol) return arr; const d=_sortDir;
+      const cmp=(a,b)=>{let va=a[_sortCol],vb=b[_sortCol];
+        if (_sortCol==="size"){va=+va||0;vb=+vb||0;}
+        else if (_sortCol==="secrets_cnt"){va=(a.secrets||[]).length;vb=(b.secrets||[]).length;}
+        else if (_sortCol==="score"){va=computeScore(a);vb=computeScore(b);}
+        else{va=(va||"").toLowerCase();vb=(vb||"").toLowerCase();}
+        return va<vb?-1:va>vb?1:0;
+      }; return [...arr].sort((a,b)=>cmp(a,b)*d);
+    }
+    document.querySelectorAll(".th-sort").forEach(th=>{
+      th.onclick=()=>{
+        const col=th.dataset.col;
+        if(_sortCol===col)_sortDir*=-1;else{_sortCol=col;_sortDir=1;}
+        document.querySelectorAll(".th-sort").forEach(s=>s.classList.remove("sort-asc","sort-desc"));
+        th.classList.add(_sortDir===1?"sort-asc":"sort-desc");
+        _page=0; render();
+      };
+    });
+
+    // -- render results --
+    function render() {
+      let rows=sortFindings(filtered()); const total=rows.length;
+      _pageSize=_settings.pageSize||999999; const pages=Math.ceil(total/_pageSize)||1;
+      if(_page>=pages)_page=pages-1;
+      const start=_page*_pageSize,end=Math.min(start+_pageSize,total),pageRows=rows.slice(start,end);
+      const compact=$("compactView").checked,cv=_settings.colVis;
+      $("empty").style.display=total?"none":"block";
+      $("tabBadge-results").textContent=total; $("tabBadge-results").style.display=total?"inline-flex":"none";
+      $("resultInfo").textContent=total?`${total} finding${total>1?"s":""}${total>_pageSize?` (${start+1}-${end})`:""}`:"No findings";
+      const pg=$("pagination");
+      if(total>_pageSize){pg.classList.remove("hidden");$("pgPrev").disabled=_page===0;$("pgNext").disabled=_page>=pages-1;$("pgInfo").textContent=`Page ${_page+1} of ${pages}`;}
+      else{pg.classList.add("hidden");}
+      _selSet=new Set([..._selSet].filter(k=>rows.some(x=>x.url===k)));
+      $("rows").innerHTML=pageRows.map((x,i)=>{
+        const idx=start+i,globIdx=findings.indexOf(x);
+        const secrets=(x.secrets||[]).map(s=>s.label).join(", ");
+        const sc=sevColor(x.severity),score=computeScore(x),sc2=scoreColor(score);
+        const rowCls="tr-hover"; const checked=_selSet.has(x.url)?"checked":"";
+        const tags=matchCustomPatterns(x.filename);
+        const tagHtml=tags.length?tags.map(t=>`<span class="badge badge-neutral" style="font-size:8px">${esc(t)}</span>`).join(""):"";
+        return `<tr class="${rowCls}" style="border-top:1px solid var(--border)">
+          <td style="padding:6px 8px"><input type="checkbox" class="row-sel sel-item" data-url="${esc(x.url)}" ${checked} /></td>
+          <td style="padding:6px 8px;${cv.score===false?'display:none':''}"><span style="color:${sc2};font-weight:700;font-family:var(--mono)">${score}</span></td>
+          <td style="padding:6px 8px;${cv.severity===false?'display:none':''}"><span class="badge badge-${x.severity}">${x.severity||""}</span></td>
+          <td style="padding:6px 8px;font-weight:500;${cv.filename===false?'display:none':''}"><span style="opacity:.5">${iconFor(x.filename)}</span> ${esc(x.filename)}${tagHtml}</td>
+          <td style="padding:6px 8px;color:var(--text2);${cv.category===false?'display:none':''}">${esc(x.category)}</td>
+          <td style="padding:6px 8px;color:var(--text3);${cv.detected_type===false?'display:none':''}">${esc(x.detected_type)}</td>
+          <td style="padding:6px 8px;color:var(--text3);font-family:var(--mono);${cv.size===false?'display:none':''}">${fmtSize(x.size)}</td>
+          <td style="padding:6px 8px;${cv.secrets===false?'display:none':''}">${(x.secrets||[]).length?`<span class="badge badge-${x.severity}">${(x.secrets||[]).length}</span>`:'<span style="color:var(--text3)">-</span>'}</td>
+          <td style="padding:6px 8px;color:var(--text3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none" class="md-col">${esc(x.url)}</td>
+          <td style="padding:6px 8px;white-space:nowrap">
+            <button class="act" data-i="${globIdx}" data-a="open" style="border:none;background:none;color:var(--primary);cursor:pointer;font-size:11px;padding:0 4px;transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">open</button>
+            <button class="act" data-i="${globIdx}" data-a="copy" style="border:none;background:none;color:var(--primary);cursor:pointer;font-size:11px;padding:0 4px;transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">copy</button>
+            <button class="act" data-i="${globIdx}" data-a="preview" style="border:none;background:none;color:var(--primary);cursor:pointer;font-size:11px;padding:0 4px;transition:opacity .15s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">view</button>
+          </td>
+        </tr>`;
+      }).join("");
+      updateSelInfo(); updateDonut(total?rows:[]);
+    }
+    function updateSelInfo(){const c=_selSet.size;$("selInfo").textContent=c?`${c} selected`:"";$("batchCopy").style.display=c?"inline":"none";}
+    $("rows").addEventListener("change",e=>{const cb=e.target.closest(".sel-item");if(!cb)return;if(cb.checked)_selSet.add(cb.dataset.url);else _selSet.delete(cb.dataset.url);updateSelInfo();});
+    $("selAll").onchange=()=>{const rows=filtered();if($("selAll").checked)rows.forEach(x=>_selSet.add(x.url));else _selSet.clear();render();};
+    $("batchCopy").onclick=()=>{const urls=[..._selSet].join("\n");if(urls)navigator.clipboard.writeText(urls);toast("Copied "+_selSet.size+" URLs.");};
+    $("pgPrev").onclick=()=>{if(_page>0){_page--;render();}};
+    $("pgNext").onclick=()=>{const pages=Math.ceil(filtered().length/_pageSize);if(_page<pages-1){_page++;render();}};
+
+    // -- donut --
+    function updateDonut(rows) {
+      const svg=$("donutSvg"),leg=$("donutLegend");
+      if(!rows.length){svg.innerHTML="";leg.innerHTML="";return;}
+      const sevs=["critical","high","medium","low"],counts={},colors={};let total=0;
+      sevs.forEach(s=>{counts[s]=0;colors[s]=sevColor(s);});
+      rows.forEach(x=>{if(counts[x.severity]!==undefined)counts[x.severity]++;total++;});
+      if(!total){svg.innerHTML="";leg.innerHTML="";return;}
+      const cx=90,cy=90,r=72;
+      let html=`<text x="${cx}" y="${cy-3}" text-anchor="middle" fill="var(--text)" font-size="24" font-weight="700">${total}</text><text x="${cx}" y="${cy+13}" text-anchor="middle" fill="var(--text3)" font-size="10">findings</text>`;
+      let cum=0;
+      sevs.forEach(s=>{
+        if(!counts[s])return;
+        const pct=counts[s]/total,sa=cum*360-90,ea=(cum+pct)*360-90;cum+=pct;
+        const x1=cx+r*Math.cos(sa*Math.PI/180),y1=cy+r*Math.sin(sa*Math.PI/180);
+        const x2=cx+r*Math.cos(ea*Math.PI/180),y2=cy+r*Math.sin(ea*Math.PI/180);
+        html+=`<path d="M${cx} ${cy} L${x1} ${y1} A${r} ${r} 0 ${pct>0.5?1:0} 1 ${x2} ${y2} Z" fill="${colors[s]}" opacity=".85"/>`;
+      });
+      html+=`<circle cx="${cx}" cy="${cy}" r="45" fill="var(--bg2)" fill-opacity=".9"/>`;
+      svg.innerHTML=html;
+      leg.innerHTML=sevs.map(s=>`<div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:${colors[s]}"></span><span style="color:${sevColor(s)}">${counts[s]}</span><span style="color:var(--text3);text-transform:capitalize">${s}</span></div>`).join("");
+    }
+
+    // -- actions --
+    $("rows").addEventListener("click",e=>{
+      const b=e.target.closest(".act");if(!b)return;
+      const x=findings[+b.dataset.i];if(!x)return;
+      if(b.dataset.a==="open")window.open(x.url,"_blank");
+      else if(b.dataset.a==="copy"){navigator.clipboard.writeText(x.url);toast("URL copied.");}
+else if(b.dataset.a==="preview"){
+        $("modalTitle").innerHTML=esc(x.filename)+` <span style="color:${sevColor(x.severity)}">[${x.severity}]</span> <span style="color:var(--text3);font-weight:400;font-size:12px">Score: ${computeScore(x)}</span>`;
+        const secrets=(x.secrets||[]).map(s=>`<span class="badge bg-${s.severity}">${s.label}</span>`).join(" ");
+        const ent=(x.entropy||[]).map(e=>`<span class="badge bg-medium">${e.label}: ${e.entropy.toFixed(1)}</span>`).join(" ");
+        const head=`URL: ${x.url}\nMethod: GET\nSeverity: ${x.severity}  Category: ${x.category}\nDetected: ${x.detected_type}  Mismatch: ${x.mismatch}\nSecrets: ${secrets||"none"}\nEntropy: ${ent||"none"}\nSHA256: ${x.sha256||""}\n${"=".repeat(60)}\n`;
+        let prev=x.preview||"(no preview / binary)";
+        // highlight secrets in preview
+        (x.secrets||[]).forEach(s=>{
+          const escCtx=esc(s.context||"");
+          if(escCtx){
+            const re=new RegExp(escCtx.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"g");
+            prev=prev.replace(re,`<mark style="background:rgba(239,68,68,0.3);color:#fca5a5;padding:0 2px;border-radius:2px">${escCtx}</mark>`);
+          }
+        });
+        // highlight entropy matches (if any)
+        (x.entropy||[]).forEach(e=>{
+          // entropy items don't have context, skip inline highlight
+        });
+        $("modalBody").innerHTML=head+prev;
+        $("modalBody").style.borderLeftColor=sevColor(x.severity);
+        $("modal").classList.remove("hidden");
+      }
+    });
+    function closeModal(){$("modal").classList.add("hidden");}
+    $("modal").onclick=e=>{if(e.target.classList.contains("modal-overlay"))closeModal();};
+    document.addEventListener("keydown",e=>{if(e.key==="Escape"){$("modal").classList.add("hidden");$("treeCtx").classList.add("hidden");$("exportMenu").classList.add("hidden");$("settingsOverlay").classList.add("hidden");$("settingsPanel").classList.add("hidden");}});
+
+    // -- tabs --
+    document.querySelectorAll(".tab-btn").forEach(t=>{
+      t.onclick=()=>{
+        document.querySelectorAll(".tab-btn").forEach(x=>x.classList.remove("active"));
+        t.classList.add("active");
+        ["results","tree","summary","log"].forEach(p=>$("panel-"+p).classList.add("hidden"));
+        $("panel-"+t.dataset.tab).classList.remove("hidden");
+      };
+    });
+    function switchTab(name){const t=document.querySelector('.tab-btn[data-tab="'+name+'"]');if(t)t.click();}
+
+    // -- keyboard shortcuts --
+    document.addEventListener("keydown",e=>{
+      if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
+      if(e.key==="r"||e.key==="R")switchTab("results");
+      if(e.key==="t"||e.key==="T")switchTab("tree");
+      if(e.key==="s"||e.key==="S")switchTab("summary");
+      if(e.key==="l"||e.key==="L")switchTab("log");
+      if(e.key==="Enter"&&!scanning&&$("url").value.trim())$("startBtn").click();
+      if(e.key===","||e.key==="<"){if($("settingsPanel").classList.contains("hidden"))$("settingsBtn").click();else closeSettings();}
+    });
+
+    // -- export --
+    $("exportBtn").onclick=()=>$("exportMenu").classList.toggle("hidden");
+    document.querySelectorAll(".exp-item").forEach(b=>b.onclick=()=>{
+      $("exportMenu").classList.add("hidden");
+      const f=currentFilter();
+      const qs=new URLSearchParams({format:b.dataset.fmt,...Object.fromEntries(Object.entries(f).filter(([k,v])=>v))});
+      qs.set("token", TOKEN());
+      window.open("/api/export?"+qs.toString(),"_blank");
+    });
+
+    // -- controls --
+    $("workers").oninput=e=>$("workersVal").textContent=e.target.value;
+    $("depth").oninput=e=>$("depthVal").textContent=e.target.value==0?"\u221e":e.target.value;
+    $("compactView").onchange=()=>render();
+
+
+// -- saved scans --
+    async function loadSavedScans() {
+      const r = await fetch("/api/scans", { headers: AUTH_HDR() });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return data.scans || [];
+    }
+    function getSeverityCounts(arr) { const c = { critical: 0, high: 0, medium: 0, low: 0 }; arr.forEach(x => { if (c[x.severity] !== undefined) c[x.severity]++; }); return c; }
+    async function saveScan(url, config, findingsData, treeData, summaryData) {
+      const sev = getSeverityCounts(findingsData);
+      const duration = _scanStartTime ? Math.round((Date.now() - _scanStartTime) / 1000) : 0;
+      const payload = {
+        url, config,
+        findings: findingsData.slice(0, 500),
+        tree: treeData,
+        summary: { findings_count: findingsData.length, frameworks: summaryData?.frameworks || [], cloud: summaryData?.cloud || [] }
+      };
+      const r = await fetch("/api/scans", { method: "POST", headers: { ...AUTH_HDR(), "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (r.ok) renderSavedScans();
+    }
+    async function deleteScan(id) {
+      const r = await fetch(`/api/scans/${id}`, { method: "DELETE", headers: AUTH_HDR() });
+      if (r.ok) { renderSavedScans(); toast("Scan deleted."); }
+    }
+    async function loadScan(id) {
+      const r = await fetch(`/api/scans/${id}`, { headers: AUTH_HDR() });
+      if (!r.ok) return;
+      const scan = await r.json();
+      if (!scan) return;
+      findings.length = 0;
+      (scan.findings || []).forEach(f => findings.push(f));
+      TREE.__dirs = {}; TREE.__files = [];
+      findings.forEach(f => { if (f.path) addFile(f.path, f); });
+      $("url").value = scan.url || "";
+      render(); renderTree();
+      const ts = scan.tree || {};
+      $("summaryOut").textContent = `=== Scan Summary ===\nFindings : ${scan.summary?.findings_count || scan.findingsCount}\nFolders  : ${ts.folders || scan.folders}\nScanned  : ${ts.files || scan.scanned}\nRequests : ${scan.summary?.stats?.requests ?? "-"}\nCritical : ${scan.critical}  High : ${scan.high}  Medium : ${scan.medium}  Low : ${scan.low}\nFrameworks : ${(scan.frameworks || []).join(", ") || "none"}\nCloud hints: ${(scan.cloud || []).join(", ") || "none"}`;
+      toast("Loaded scan: " + scan.url + " (" + (scan.summary?.findings_count || scan.findingsCount) + " findings)", "success");
+      switchTab("results");
+    }
+    async function renderSavedScans() {
+      const scans = await loadSavedScans();
+      $("savedScansList").innerHTML = scans.length ? scans.map(s => {
+        const d = new Date(s.created * 1000);
+        const ds = d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const sv = (s.critical ? `<span style="color:var(--critical)">${s.critical}C</span>` : '') + (s.high ? `<span style="color:var(--high)"> ${s.high}H</span>` : '') + (s.medium ? `<span style="color:var(--medium)"> ${s.medium}M</span>` : '') + (s.low ? `<span style="color:var(--low)"> ${s.low}L</span>` : '');
+        return `<div class="saved-item" data-id="${s.id}">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:11px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="${esc(s.url)}">${esc(s.url)}</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:6px">${s.summary?.findings_count || s.findingsCount}</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:9px;margin-top:2px">
+            <span style="color:var(--text3)">${sv || '<span style="color:var(--text3)">0 findings</span>'}</span>
+            <span style="color:var(--text3)">${ds}</span>
+          </div>
+        </div>`;
+      }).join("") : '<p style="color:var(--text3);font-size:11px">No saved scans yet.</p>';
+      document.querySelectorAll(".saved-item").forEach(el => { el.onclick = () => loadScan(el.dataset.id); el.oncontextmenu = (e) => { e.preventDefault(); if (confirm("Delete this saved scan?")) deleteScan(el.dataset.id); }; });
+    }
+$("exportSavedBtn").onclick=async()=>{
+      const scans=await loadSavedScans();if(!scans.length){toast("No saved scans to export.","error");return;}
+      const blob=new Blob([JSON.stringify(scans,null,2)],{type:"application/json"});
+      const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="indexhunter_scans_"+new Date().toISOString().slice(0,10)+".json";a.click();URL.revokeObjectURL(a.href);
+      toast("Exported "+scans.length+" scans.","success");
+    };
+    $("importSavedBtn").onclick=()=>$("importFileInput").click();
+    $("importFileInput").onchange=e=>{
+      const file=e.target.files[0];if(!file)return;
+      const reader=new FileReader();
+      reader.onload=async ev=>{try{const imported=JSON.parse(ev.target.result);if(!Array.isArray(imported))throw new Error();for(const s of imported){await fetch("/api/scans",{method:"POST",headers:{...AUTH_HDR(),"Content-Type":"application/json"},body:JSON.stringify(s)});}renderSavedScans();toast("Imported "+imported.length+" scans.","success");}catch(err){toast("Invalid JSON file.","error");}};
+      reader.readAsText(file);e.target.value="";
+    };
+
+    // -- log --
+    $("logClear").onclick=()=>{$("logOut").textContent="";logLines=0;$("logLineCount").textContent="0 lines";};
+    function appendLog(line){logLines++;$("logOut").textContent+=line+"\n";$("logLineCount").textContent=logLines+" line"+(logLines!==1?"s":"");if($("logAutoScroll").checked)$("logOut").scrollTop=$("logOut").scrollHeight;}
+
+    // -- scan --
+    $("startBtn").onclick=async()=>{
+      if(scanning)return;const url=$("url").value.trim();if(!url)return toast("Enter a target URL first.","error");
+      const body={url:url.endsWith("/")?url:url+"/",workers:+$("workers").value,depth:+$("depth").value,full:$("full").checked,robots:$("robots").checked,resume:$("resume").checked,ignore_text:$("ignore").value.trim()||undefined};
+      findings.length=0;_selSet.clear();TREE.__dirs={};TREE.__files=[];logLines=0;$("logOut").textContent="";$("logLineCount").textContent="0 lines";
+      _currentScanUrl=body.url;_scanStartTime=Date.now();_scanConfig=JSON.parse(JSON.stringify(body));
+      renderTree();render();$("progressWrap").classList.remove("hidden");$("progBar").style.width="0%";$("progPct").textContent="0%";
+      toast("Starting scan of "+body.url,"info");
+      try{const r=await fetch("/api/scan",{method:"POST",headers:Object.assign({"Content-Type":"application/json"},AUTH_HDR()),body:JSON.stringify(body)});const j=await r.json();
+        if(j.started){scanning=true;startPolling();$("startBtn").disabled=true;$("startBtn").style.opacity=".5";$("stopBtn").disabled=false;$("stopBtn").style.opacity="1";switchTab("results");}
+        else if(j.error)toast("Could not start: "+j.error,"error");else toast("Scan did not start.","error");
+      }catch(err){toast("Cannot reach /api/scan. Is the server running?","error");}
+    };
+    $("stopBtn").onclick=()=>{fetch("/api/stop",{method:"POST",headers:AUTH_HDR()});toast("Stop requested.","info");};
+
+    $("logoutBtn").onclick=async()=>{
+      await fetch("/api/logout",{method:"POST",headers:AUTH_HDR()});
+      localStorage.removeItem("indexhunter_token");
+      window.location.href="/login";
+    };
+
+    // -- 401 guard: token expired/invalid -> back to login --
+    function guard401(r){ if(r && r.status===401){ localStorage.removeItem("indexhunter_token"); window.location.href="/login"; } return r; }
+
+    // -- SSE + polling --
+    const es=new EventSource("/api/stream?token="+encodeURIComponent(TOKEN()));
+    es.onopen=()=>{};
+    es.onerror=()=>{ if(!TOKEN()) window.location.href="/login"; };
+    es.onmessage=ev=>{
+      try{const e=JSON.parse(ev.data);
+        if(e.type==="progress"){const d=e.data;
+          animateValue(dashVals.Speed,d.speed??"-");
+          dashVals.ETA.textContent=(d.speed&&d.queue)?(d.queue/d.speed<600?Math.floor(d.queue/d.speed)+"s":Math.floor(d.queue/d.speed/60)+"m"):"-";
+          animateValue(dashVals.Queue,d.queue??"-");animateValue(dashVals.Scanned,d.scanned??"-");animateValue(dashVals.Requests,d.requests??"-");
+          animateValue(dashVals.Critical,d.critical??0);animateValue(dashVals.High,d.high??0);
+          animateValue(dashVals.Medium,d.medium??0);animateValue(dashVals.Low,d.low??0);
+          dashVals.Memory.textContent=(d.memory??null)??"n/a";
+          if(d.queue||d.scanned){const t=d.scanned+d.queue;const p=t?Math.round(d.scanned/t*100):0;$("progBar").style.width=p+"%";$("progPct").textContent=p+"%";$("progLabel").textContent=`Scanned ${d.scanned} files, ${d.queue} in queue`;}
+        }else if(e.type==="dir"){addDir(e.data);scheduleTreeRender();appendLog(`[dir] ${e.data}`);}
+        else if(e.type==="found"){findings.push(e.data);addFile(e.data.path,e.data);scheduleTreeRender();render();appendLog(`[+] ${e.data.path}`);}
+        else if(e.type==="log"){appendLog(e.data);}
+        else if(e.type==="finished"){
+          scanning=false;if(window._pollStatus){clearInterval(window._pollStatus);window._pollStatus=null;}
+          $("startBtn").disabled=false;$("startBtn").style.opacity="1";$("stopBtn").disabled=true;$("stopBtn").style.opacity=".4";
+          $("progressWrap").classList.add("hidden");$("progBar").style.width="100%";renderTree();
+          const ts=e.data.tree||{};
+          $("summaryOut").textContent=`=== Scan Summary ===\nFindings : ${e.data.findings_count}\nFolders  : ${ts.folders}\nScanned  : ${ts.files}\nRequests : ${e.data.stats?.requests ?? "-"}\nCritical : ${ts.critical}  High : ${ts.high}  Medium : ${ts.medium}  Low : ${ts.low}\nFrameworks : ${(e.data.frameworks||[]).join(", ")||"none"}\nCloud hints: ${(e.data.cloud||[]).join(", ")||"none"}`;
+          toast("Done. "+e.data.findings_count+" findings.","success");
+          if(_currentScanUrl)saveScan(_currentScanUrl,_scanConfig,findings,e.data.tree||{},e.data);updateDonut(filtered());
+        }
+      }catch(err){console.warn("SSE error",err);}
+    };
+
+    // -- polling fallback --
+    function pollStatus(){
+      fetch("/api/status",{headers:AUTH_HDR()}).then(guard401).then(r=>r.json()).then(s=>{
+        if(s.running){
+          animateValue(dashVals.Scanned,s.scanned??"-");animateValue(dashVals.Queue,s.queue??"-");animateValue(dashVals.Requests,s.requests??"-");
+          animateValue(dashVals.Critical,s.critical??0);animateValue(dashVals.High,s.high??0);
+          animateValue(dashVals.Medium,s.medium??0);animateValue(dashVals.Low,s.low??0);
+          if(s.memory)dashVals.Memory.textContent=s.memory;
+          if(s.current_folder)appendLog(`[dir] ${s.current_folder}`);
+          if(s.queue||s.scanned){const t=s.scanned+s.queue;const p=t?Math.round(s.scanned/t*100):0;$("progBar").style.width=p+"%";$("progPct").textContent=p+"%";$("progLabel").textContent=`Scanned ${s.scanned} files, ${s.queue} in queue`;}
+        }else if(scanning){
+          scanning=false;if(window._pollStatus){clearInterval(window._pollStatus);window._pollStatus=null;}
+          $("startBtn").disabled=false;$("startBtn").style.opacity="1";$("stopBtn").disabled=true;$("stopBtn").style.opacity=".4";
+          $("progressWrap").classList.add("hidden");
+          fetch("/api/findings",{headers:AUTH_HDR()}).then(guard401).then(r=>r.json()).then(fr=>{findings.length=0;fr.findings?.forEach(x=>findings.push(x));render();renderTree();toast("Done. "+findings.length+" findings.","success");if(findings.length)saveScan($("url").value.trim(),_scanConfig,findings,{files:findings.length},{findings_count:findings.length});});
+        }
+      }).catch(()=>{});
+    }
+    function startPolling(){if(window._pollStatus)clearInterval(window._pollStatus);window._pollStatus=setInterval(pollStatus,2000);}
+
+    // -- tree controls + context --
+    $("treeFilter").oninput=()=>{_treeFilter=$("treeFilter").value;renderTree();};
+    $("treeExpandAll").onclick=()=>treeSetAll(true);
+    $("treeCollapseAll").onclick=()=>treeSetAll(false);
+    $("treeRoot").addEventListener("contextmenu",e=>{
+      const li=e.target.closest("li");if(!li)return;
+      const span=li.querySelector("[style*='color:#818cf8'],.sev-critical,.sev-high,.sev-medium,.sev-low");
+      if(!span)return;const name=span.textContent.trim();const isDir=!!li.querySelector(".tree-wrap");const ctx=$("treeCtx");ctx.innerHTML="";ctx.style.left=e.pageX+"px";ctx.style.top=e.pageY+"px";
+      const items=[];
+      if(isDir){
+        items.push({label:"Copy path",fn:()=>{let p="";let cur=li;while(cur){const s=cur.querySelector("[style*='color:#818cf8']");if(s)p="/"+s.textContent.trim()+p;cur=cur.parentElement.closest("li");}navigator.clipboard.writeText(p.replace(/\/\//g,"/"));toast("Path copied.");}});
+        items.push({label:"Expand children",fn:()=>{li.querySelectorAll(".tree-wrap").forEach(w=>{w.style.maxHeight=(w._sh||2000)+"px";});li.querySelectorAll(".caret").forEach(c=>c.textContent="&#9662;");}});
+      }else{
+        items.push({label:"Copy filename",fn:()=>{navigator.clipboard.writeText(name);toast("Filename copied.");}});
+        const f=findings.find(x=>x.filename===name);if(f)items.push({label:"Open URL",fn:()=>window.open(f.url,"_blank")});
+      }
+      items.forEach(item=>{const d=document.createElement("div");d.style.cssText="padding:6px 12px;cursor:pointer;font-size:11px;color:var(--text2);border-radius:4px;transition:background .1s";d.textContent=item.label;d.onmouseover=()=>d.style.background='rgba(255,255,255,0.04)';d.onmouseout=()=>d.style.background='transparent';d.onclick=()=>{item.fn();ctx.classList.add("hidden");};ctx.appendChild(d);});
+      ctx.classList.remove("hidden");e.preventDefault();
+    });
+    document.addEventListener("click",()=>$("treeCtx").classList.add("hidden"));
+
+    // -- init --
+    renderSavedScans();
+  </script>
+</body>
+</html>

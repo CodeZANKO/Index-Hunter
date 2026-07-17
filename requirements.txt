@@ -1,0 +1,13 @@
+# IndexHunter - Advanced "Index of" Sensitive File Scanner
+# Core dependencies
+aiohttp>=3.8
+beautifulsoup4>=4.11
+
+# Web UI (FastAPI)
+fastapi>=0.110
+uvicorn>=0.29
+
+# Optional (graceful degradation if missing)
+# yara-python   -> YARA rule scanning
+# reportlab     -> PDF export
+
